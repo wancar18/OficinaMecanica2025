@@ -7,24 +7,40 @@ export const db = {
   ready: false,
   async ensureReady(){
     if(this.ready) return
+    
+    // 1. Inicializa a conexão
     await sql.initDb()
+    
+    // 2. Executa as migrações (Cria as tabelas se não existirem)
     await sql.exec(MIGRATIONS_SQL)
-    const seeded = await sql.queryOne<{value:string}>('SELECT value FROM _meta WHERE key=?', ['seed_v1'])
-    if(!seeded){
-      const hash = bcrypt.hashSync('123', 10)
+
+    // 3. Verifica se o usuário ADMIN existe
+    const adminUser = await sql.queryOne<any>('SELECT * FROM users WHERE username = ?', ['admin'])
+    
+    // Gera o hash da senha '123'
+    const hash = bcrypt.hashSync('123', 10)
+
+    if (!adminUser) {
+      console.log('Criando usuário admin padrão...')
       await sql.exec(
-        'INSERT INTO users (username, display_name, role, password_hash, must_change_password, active) VALUES (?,?,?,?,1,1)',
-        ['admin','Administrador','admin', hash]
+        'INSERT INTO users (username, display_name, role, password_hash, must_change_password, active) VALUES (?,?,?,?,0,1)',
+        ['admin', 'Administrador', 'admin', hash]
       )
+      
+      // Cria categorias iniciais apenas se for uma instalação nova
       const cats = ['Peças','Ferramentas','Água/Luz','Serviços Terceiros','Outros']
       for(const c of cats){
+        // CORREÇÃO: Aspas simples para o texto 'now'
         await sql.exec(
-          'INSERT INTO expenses (date, category, method, vendor, description, amount, notes) VALUES (date("now"), ?, "outro", "", ?, 0, "")',
+          'INSERT INTO expenses (date, category, method, vendor, description, amount, notes) VALUES (date(\'now\'), ?, "outro", "", ?, 0, "")',
           [c, 'Categoria inicial']
         )
       }
-      await sql.exec('INSERT OR REPLACE INTO _meta (key, value) VALUES (?,?)', ['seed_v1', dayjs().toISOString()])
+    } else {
+      // Garante que o admin esteja ativo e com a senha 123 (recuperação automática)
+      await sql.exec('UPDATE users SET password_hash = ?, active = 1 WHERE username = ?', [hash, 'admin'])
     }
+
     this.ready = true
   }
 }
@@ -320,8 +336,9 @@ export const dal = {
           await dal.audit.log(userId, 'orders', id, 'override_entrega', justification || '')
         }
       }
+      // CORREÇÃO: Aspas simples nas strings do SQL
       await sql.exec(
-        'UPDATE orders SET status=?, closed_at=CASE WHEN ? IN ("concluida","entregue","cancelada") THEN datetime("now") ELSE closed_at END WHERE id=?',
+        'UPDATE orders SET status=?, closed_at=CASE WHEN ? IN (\'concluida\',\'entregue\',\'cancelada\') THEN datetime(\'now\') ELSE closed_at END WHERE id=?',
         [status, status, id]
       )
       await dal.audit.log(userId, 'orders', id, 'status', status)
@@ -380,9 +397,10 @@ export const dal = {
   reports: {
     async kpis(from?:string, to?:string){
       await db.ensureReady()
-      const k1 = await sql.queryOne<any>('SELECT COUNT(*) as c FROM orders WHERE status IN ("aberta","aprovada","em_execucao")')
+      // CORREÇÃO: Aspas simples nas strings
+      const k1 = await sql.queryOne<any>('SELECT COUNT(*) as c FROM orders WHERE status IN (\'aberta\',\'aprovada\',\'em_execucao\')')
       const k2 = await sql.queryOne<any>(
-        'SELECT COUNT(*) as c FROM orders WHERE status IN ("concluida","entregue") AND date(opened_at) BETWEEN date(?) AND date(?)',
+        'SELECT COUNT(*) as c FROM orders WHERE status IN (\'concluida\',\'entregue\') AND date(opened_at) BETWEEN date(?) AND date(?)',
         [from||'0001-01-01', to||'4000-01-01']
       )
       const avg = await sql.queryOne<any>(
@@ -390,7 +408,7 @@ export const dal = {
         [from||'0001-01-01', to||'4000-01-01']
       )
       const rev = await sql.queryOne<any>(
-        'SELECT COALESCE(SUM(CASE WHEN status="recebido" THEN amount ELSE 0 END),0) as v FROM payments WHERE date(date) BETWEEN date(?) AND date(?)',
+        'SELECT COALESCE(SUM(CASE WHEN status=\'recebido\' THEN amount ELSE 0 END),0) as v FROM payments WHERE date(date) BETWEEN date(?) AND date(?)',
         [from||'0001-01-01', to||'4000-01-01']
       )
       const exp = await sql.queryOne<any>(

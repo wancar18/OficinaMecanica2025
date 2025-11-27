@@ -5,8 +5,9 @@ import { useNavigate } from 'react-router-dom'
 
 export default function Login(){
   const login = useAuthStore(s=>s.login)
-  const [username,setU]=useState('admin')
-  const [password,setP]=useState('123')
+  // Alterado: Inicia vazio em vez de 'admin' e '123'
+  const [username,setU]=useState('')
+  const [password,setP]=useState('')
   const [msg,setMsg]=useState('')
   const navigate = useNavigate()
 
@@ -28,11 +29,24 @@ export default function Login(){
         <h1 className="text-xl font-bold mb-4">Acessar</h1>
         <div className="mb-3">
           <label className="label">Usuário</label>
-          <input className="input" value={username} onChange={e=>setU(e.target.value)} />
+          {/* Adicionado placeholder */}
+          <input 
+            className="input" 
+            placeholder="Usuário"
+            value={username} 
+            onChange={e=>setU(e.target.value)} 
+          />
         </div>
         <div className="mb-3">
           <label className="label">Senha</label>
-          <input type="password" className="input" value={password} onChange={e=>setP(e.target.value)} />
+          {/* Adicionado placeholder */}
+          <input 
+            type="password" 
+            className="input" 
+            placeholder="Senha"
+            value={password} 
+            onChange={e=>setP(e.target.value)} 
+          />
         </div>
         {msg && <div className="text-red-400 text-sm mb-3">{msg}</div>}
         <button className="btn w-full" type="submit">Entrar</button>
